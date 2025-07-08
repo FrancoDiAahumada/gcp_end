@@ -1,0 +1,13 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Python / Cloud Function
+__pycache__/
+.env
+*.pyc
+
+# Otros
+*.log

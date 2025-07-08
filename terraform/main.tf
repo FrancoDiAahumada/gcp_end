@@ -1,0 +1,142 @@
+# Especifica la versión del proveedor para evitar bugs
+terraform {
+  required_version = ">= 1.0"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.44.0"  # Versión 5.x estable sin el bug
+    }
+  }
+}
+
+# Configura el proveedor de Google Cloud con el proyecto y la región especificados en las variables
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+# Crea un bucket de Google Cloud Storage para almacenar datos meteorológicos
+resource "google_storage_bucket" "weather_data_bucket" {
+  name                        = var.bucket_name                # Nombre del bucket, definido por una variable
+  location                    = var.region                     # Región donde se crea el bucket
+  force_destroy               = true                           # Permite eliminar el bucket aunque tenga objetos
+  uniform_bucket_level_access = true                           # Acceso uniforme a nivel de bucket
+}
+
+# Crea un dataset de BigQuery para almacenar datos meteorológicos
+resource "google_bigquery_dataset" "weather_dataset" {
+  dataset_id = var.dataset_name                                # ID del dataset, definido por una variable
+  location   = var.region                                      # Región donde se crea el dataset
+}
+
+
+resource "google_cloudfunctions2_function" "weather_extract" {
+  name     = "weather-etl-extract"
+  location = "us-central1"
+  project  = "weather-etl-pipeline-464514"
+  
+  build_config {
+    runtime     = "python311"
+    entry_point = "extract_weather_data"
+    docker_repository = "projects/weather-etl-pipeline-464514/locations/us-central1/repositories/gcf-artifacts"
+    service_account = "projects/weather-etl-pipeline-464514/serviceAccounts/990904885293-compute@developer.gserviceaccount.com"
+    
+    source {
+      storage_source {
+        bucket     = "gcf-v2-sources-990904885293-us-central1"
+        object     = "weather-etl-extract/function-source.zip"
+
+      }
+    }
+  }
+  
+  service_config {
+    min_instance_count = 0
+    max_instance_count = 100
+    available_memory   = "256M"
+    available_cpu      = "0.1666"
+    timeout_seconds    = 540
+    max_instance_request_concurrency = 1
+    all_traffic_on_latest_revision = true
+    ingress_settings = "ALLOW_ALL"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
+    
+    environment_variables = {
+      BUCKET_NAME           = "weather-data-lake-weather-etl-pipeline-464514"
+      DATASET_ID           = "weather_analytics"
+      LOG_EXECUTION_ID     = "true"
+      OPENWEATHER_API_KEY  = "30c17083022498b37050b5048cac1825"
+      PROJECT_ID           = "weather-etl-pipeline-464514"
+    }
+  }
+  
+  event_trigger {
+    trigger_region = "us-central1"
+    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic   = "projects/weather-etl-pipeline-464514/topics/weather-trigger"
+    retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
+  }
+
+  labels = {
+    deployment-tool = "cli-gcloud"
+  }
+}
+
+
+resource "google_cloudfunctions2_function" "weather_transform" {
+  name     = "weather-etl-transform"
+  location = "us-central1"
+  project  = "weather-etl-pipeline-464514"
+  
+  build_config {
+    runtime     = "python311"
+    entry_point = "transform_weather_data"
+    docker_repository = "projects/weather-etl-pipeline-464514/locations/us-central1/repositories/gcf-artifacts"
+    service_account = "projects/weather-etl-pipeline-464514/serviceAccounts/990904885293-compute@developer.gserviceaccount.com"
+    
+    source {
+      storage_source {
+        bucket = "gcf-v2-sources-990904885293-us-central1"
+        object = "weather-etl-transform/function-source.zip"
+        # generation = "1751904491030691" - Omitido para evitar errores de formato
+      }
+    }
+  }
+  
+  service_config {
+    min_instance_count = 0
+    max_instance_count = 100
+    available_memory   = "256M"
+    available_cpu      = "0.1666"
+    timeout_seconds    = 540
+    max_instance_request_concurrency = 1
+    all_traffic_on_latest_revision = true
+    ingress_settings = "ALLOW_ALL"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
+    
+    environment_variables = {
+      DATASET_ID       = "weather_analytics"
+      LOG_EXECUTION_ID = "true"
+      PROJECT_ID       = "weather-etl-pipeline-464514"
+    }
+  }
+  
+  event_trigger {
+    trigger_region = "us-central1"
+    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic   = google_pubsub_topic.weather_topic.id
+    retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
+  }
+
+  labels = {
+    deployment-tool = "cli-gcloud"
+  }
+}
+
+# También necesitas importar el topic de Pub/Sub
+resource "google_pubsub_topic" "weather_topic" {
+  name    = "weather-trigger"
+  project = "weather-etl-pipeline-464514"
+}
