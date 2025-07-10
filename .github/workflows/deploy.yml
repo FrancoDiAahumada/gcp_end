@@ -6,3 +6,4 @@ gcloud functions deploy weather_extract \
 
 # Línea 65: cambiar nombres de funciones  
 gcloud functions deploy weather_transform \
+# Línea 74: cambiar nombres de funciones
