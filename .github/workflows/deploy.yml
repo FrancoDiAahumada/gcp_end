@@ -1,0 +1,8 @@
+# Línea 7: cambiar por tu proyecto
+PROJECT_ID: weather-etl-pipeline-464514
+
+# Línea 56: cambiar nombres de funciones
+gcloud functions deploy weather_extract \
+
+# Línea 65: cambiar nombres de funciones  
+gcloud functions deploy weather_transform \
