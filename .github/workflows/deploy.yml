@@ -129,4 +129,4 @@ jobs:
         echo "   - weather_extract (Gen2)"
         echo "   - weather_transform (Gen2)" 
         echo "📊 Infraestructura de monitoreo configurada"
-        echo "✉️ Alertas por email configuradas"
+        echo "✉️ Alertas por email configuradas 2"
