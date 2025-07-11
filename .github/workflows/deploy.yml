@@ -45,38 +45,9 @@ jobs:
         gcloud services enable logging.googleapis.com || echo "⚠️ No se pudo habilitar Logging API"
         gcloud services enable monitoring.googleapis.com || echo "⚠️ No se pudo habilitar Monitoring API"
         gcloud services enable bigquery.googleapis.com || echo "⚠️ No se pudo habilitar BigQuery API"
+        gcloud services enable pubsub.googleapis.com || echo "⚠️ No se pudo habilitar Pub/Sub API"
+        gcloud services enable storage.googleapis.com || echo "⚠️ No se pudo habilitar Storage API"
         echo "✅ Intento de habilitación de APIs completado"
-    
-    - name: Deploy Weather Extract Function
-      run: |
-        echo "Desplegando función de extracción..."
-        gcloud functions deploy weather_extract \
-          --runtime python311 \
-          --trigger-http \
-          --entry-point main \
-          --source ./weather-etl-extract \
-          --region=$REGION \
-          --project=$PROJECT_ID \
-          --allow-unauthenticated \
-          --timeout=540s \
-          --memory=512MB \
-          --gen2 \
-          --set-env-vars PROJECT_ID=$PROJECT_ID,BUCKET_NAME=weather-etl-bucket,DATASET_ID=weather_analytics,OPENWEATHER_API_KEY=${{ secrets.OPENWEATHER_API_KEY }}
-    
-    - name: Deploy Weather Transform Function
-      run: |
-        echo "Desplegando función de transformación..."
-        gcloud functions deploy weather_transform \
-          --runtime python311 \
-          --trigger-http \
-          --entry-point main \
-          --source ./weather-etl-transform \
-          --region=$REGION \
-          --project=$PROJECT_ID \
-          --allow-unauthenticated \
-          --timeout=540s \
-          --memory=256MB \
-          --gen2
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -101,6 +72,47 @@ jobs:
         terraform apply -auto-approve \
           -var="project_id=$PROJECT_ID" \
           -var="notification_email=${{ secrets.NOTIFICATION_EMAIL }}"
+    
+    # Obtener outputs de Terraform para usar en funciones
+    - name: Get Terraform Outputs
+      id: terraform_outputs
+      run: |
+        cd terraform
+        BUCKET_NAME=$(terraform output -raw bucket_name)
+        echo "bucket_name=$BUCKET_NAME" >> $GITHUB_OUTPUT
+        echo "Bucket name from Terraform: $BUCKET_NAME"
+    
+    - name: Deploy Weather Extract Function
+      run: |
+        echo "Desplegando función de extracción..."
+        gcloud functions deploy weather_extract \
+          --runtime python311 \
+          --trigger-http \
+          --entry-point main \
+          --source ./weather-etl-extract \
+          --region=$REGION \
+          --project=$PROJECT_ID \
+          --allow-unauthenticated \
+          --timeout=540s \
+          --memory=512MB \
+          --gen2 \
+          --set-env-vars PROJECT_ID=$PROJECT_ID,BUCKET_NAME=${{ steps.terraform_outputs.outputs.bucket_name }},DATASET_ID=weather_analytics,OPENWEATHER_API_KEY=${{ secrets.OPENWEATHER_API_KEY }}
+    
+    - name: Deploy Weather Transform Function
+      run: |
+        echo "Desplegando función de transformación..."
+        gcloud functions deploy weather_transform \
+          --runtime python311 \
+          --trigger-http \
+          --entry-point main \
+          --source ./weather-etl-transform \
+          --region=$REGION \
+          --project=$PROJECT_ID \
+          --allow-unauthenticated \
+          --timeout=540s \
+          --memory=256MB \
+          --gen2 \
+          --set-env-vars PROJECT_ID=$PROJECT_ID,BUCKET_NAME=${{ steps.terraform_outputs.outputs.bucket_name }},DATASET_ID=weather_analytics
     
     - name: Test Functions
       run: |
