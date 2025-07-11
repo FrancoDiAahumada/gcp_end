@@ -61,12 +61,12 @@ resource "google_cloudfunctions2_function" "weather_extract" {
     ingress_settings = "ALLOW_ALL"
     service_account_email = "990904885293-compute@developer.gserviceaccount.com"
     
-    environment_variables = {
-      BUCKET_NAME           = "weather-data-lake-weather-etl-pipeline-464514"
-      DATASET_ID           = "weather_analytics"
+environment_variables = {
+      BUCKET_NAME           = var.bucket_name
+      DATASET_ID           = var.dataset_name
       LOG_EXECUTION_ID     = "true"
-      OPENWEATHER_API_KEY  = "30c17083022498b37050b5048cac1825"
-      PROJECT_ID           = "weather-etl-pipeline-464514"
+      OPENWEATHER_API_KEY  = var.openweather_api_key  # ✅ Usando variable
+      PROJECT_ID           = var.project_id
     }
   }
   
@@ -139,4 +139,38 @@ resource "google_cloudfunctions2_function" "weather_transform" {
 resource "google_pubsub_topic" "weather_topic" {
   name    = "weather-trigger"
   project = "weather-etl-pipeline-464514"
+}
+
+# Agrega estos recursos a tu main.tf existente
+
+# Dataset para logs
+resource "google_bigquery_dataset" "etl_logs" {
+  dataset_id = "etl_logs"
+  location   = "US"
+  project    = var.project_id
+}
+
+# Sink para logs
+resource "google_logging_project_sink" "logs_to_bigquery" {
+  name        = "logs-to-bq"
+  destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/etl_logs"
+  filter      = "resource.type=cloud_function"
+  project     = var.project_id
+  
+  unique_writer_identity = true
+  
+  bigquery_options {
+    use_partitioned_tables = true
+  }
+}
+
+# Canal de notificación por email
+resource "google_monitoring_notification_channel" "email" {
+  display_name = "Alertas ETL por correo"
+  type         = "email"
+  project      = var.project_id
+  
+  labels = {
+    email_address = var.notification_email
+  }
 }

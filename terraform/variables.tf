@@ -1,33 +1,34 @@
 variable "project_id" {
-  description = "ID del proyecto de Google Cloud"
+  description = "The GCP project ID"
   type        = string
   default     = "weather-etl-pipeline-464514"
 }
 
 variable "region" {
-  description = "Región para desplegar recursos"
+  description = "The GCP region"
   type        = string
   default     = "us-central1"
 }
 
 variable "bucket_name" {
-  description = "Nombre del bucket de Cloud Storage"
+  description = "Name of the storage bucket"
   type        = string
   default     = "weather-data-bucket-unique-name"
 }
 
 variable "dataset_name" {
-  description = "Nombre del dataset de BigQuery"
+  description = "Name of the BigQuery dataset"
   type        = string
   default     = "weather_analytics"
 }
 
 variable "openweather_api_key" {
+  description = "OpenWeather API key"
   type        = string
-  description = "API key para OpenWeather"
+  sensitive   = true
 }
 
 variable "notification_email" {
-  description = "Correo para recibir alertas de monitoreo"
+  description = "Email for monitoring notifications"
   type        = string
 }

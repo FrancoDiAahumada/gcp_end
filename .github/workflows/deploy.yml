@@ -77,12 +77,7 @@ jobs:
           --timeout=540s \
           --memory=256MB \
           --gen2
-    
-    - name: Test Functions (Load function not found)
-      run: |
-        echo "⚠️ Función de carga no encontrada en la estructura"
-        echo "Solo se desplegaron las funciones de extracción y transformación"
-    
+
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
