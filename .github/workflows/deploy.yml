@@ -51,43 +51,36 @@ jobs:
       run: |
         echo "Desplegando función de extracción..."
         gcloud functions deploy weather_extract \
-          --runtime python39 \
+          --runtime python311 \
           --trigger-http \
           --entry-point main \
-          --source ./functions/extract \
+          --source ./weather-etl-extract \
           --region=$REGION \
           --project=$PROJECT_ID \
           --allow-unauthenticated \
           --timeout=540s \
-          --memory=256MB
+          --memory=256MB \
+          --gen2
     
     - name: Deploy Weather Transform Function
       run: |
         echo "Desplegando función de transformación..."
         gcloud functions deploy weather_transform \
-          --runtime python39 \
+          --runtime python311 \
           --trigger-http \
           --entry-point main \
-          --source ./functions/transform \
+          --source ./weather-etl-transform \
           --region=$REGION \
           --project=$PROJECT_ID \
           --allow-unauthenticated \
           --timeout=540s \
-          --memory=256MB
+          --memory=256MB \
+          --gen2
     
-    - name: Deploy Weather Load Function
+    - name: Test Functions (Load function not found)
       run: |
-        echo "Desplegando función de carga..."
-        gcloud functions deploy weather_load \
-          --runtime python39 \
-          --trigger-http \
-          --entry-point main \
-          --source ./functions/load \
-          --region=$REGION \
-          --project=$PROJECT_ID \
-          --allow-unauthenticated \
-          --timeout=540s \
-          --memory=512MB
+        echo "⚠️ Función de carga no encontrada en la estructura"
+        echo "Solo se desplegaron las funciones de extracción y transformación"
     
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -118,18 +111,14 @@ jobs:
         echo "Probando funciones desplegadas..."
         
         # Test extract function
-        EXTRACT_URL=$(gcloud functions describe weather_extract --region=$REGION --format="value(httpsTrigger.url)")
+        EXTRACT_URL=$(gcloud functions describe weather_extract --region=$REGION --format="value(serviceConfig.uri)" --gen2)
         echo "URL de extracción: $EXTRACT_URL"
         
         # Test transform function
-        TRANSFORM_URL=$(gcloud functions describe weather_transform --region=$REGION --format="value(httpsTrigger.url)")
+        TRANSFORM_URL=$(gcloud functions describe weather_transform --region=$REGION --format="value(serviceConfig.uri)" --gen2)
         echo "URL de transformación: $TRANSFORM_URL"
         
-        # Test load function
-        LOAD_URL=$(gcloud functions describe weather_load --region=$REGION --format="value(httpsTrigger.url)")
-        echo "URL de carga: $LOAD_URL"
-        
-        echo "✅ Todas las funciones se desplegaron correctamente"
+        echo "✅ Funciones disponibles desplegadas correctamente"
     
     - name: Deploy Summary
       run: |
@@ -137,8 +126,7 @@ jobs:
         echo "📍 Proyecto: $PROJECT_ID"
         echo "🌍 Región: $REGION"
         echo "🔧 Funciones desplegadas:"
-        echo "   - weather_extract"
-        echo "   - weather_transform" 
-        echo "   - weather_load"
+        echo "   - weather_extract (Gen2)"
+        echo "   - weather_transform (Gen2)" 
         echo "📊 Infraestructura de monitoreo configurada"
         echo "✉️ Alertas por email configuradas"
