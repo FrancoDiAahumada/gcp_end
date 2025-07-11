@@ -11,12 +11,6 @@ terraform {
       version = "~> 0.9.1"
     }
   }
-  
-  # ✅ AGREGAR ESTA CONFIGURACIÓN DE BACKEND
-  backend "gcs" {
-    bucket = "weather-etl-terraform-state-464514"
-    prefix = "terraform/state"
-  }
 }
 
 # Configura el proveedor de Google Cloud con timeouts aumentados
@@ -92,6 +86,7 @@ resource "google_bigquery_dataset" "weather_dataset" {
   location   = var.region                                      # Región donde se crea el dataset
 }
 
+
 resource "google_cloudfunctions2_function" "weather_extract" {
   depends_on = [
     time_sleep.wait_for_apis,
@@ -112,6 +107,7 @@ resource "google_cloudfunctions2_function" "weather_extract" {
       storage_source {
         bucket     = "gcf-v2-sources-990904885293-us-central1"
         object     = "weather-etl-extract/function-source.zip"
+
       }
     }
   }
@@ -138,6 +134,61 @@ environment_variables = {
   event_trigger {
     trigger_region = "us-central1"
     event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+<<<<<<< HEAD
+=======
+    pubsub_topic   = "projects/weather-etl-pipeline-464514/topics/weather-trigger"
+    retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
+  }
+
+  labels = {
+    deployment-tool = "cli-gcloud"
+  }
+}
+
+
+resource "google_cloudfunctions2_function" "weather_transform" {
+  name     = "weather-etl-transform"
+  location = "us-central1"
+  project  = "weather-etl-pipeline-464514"
+  
+  build_config {
+    runtime     = "python311"
+    entry_point = "transform_weather_data"
+    docker_repository = "projects/weather-etl-pipeline-464514/locations/us-central1/repositories/gcf-artifacts"
+    service_account = "projects/weather-etl-pipeline-464514/serviceAccounts/990904885293-compute@developer.gserviceaccount.com"
+    
+    source {
+      storage_source {
+        bucket = "gcf-v2-sources-990904885293-us-central1"
+        object = "weather-etl-transform/function-source.zip"
+        # generation = "1751904491030691" - Omitido para evitar errores de formato
+      }
+    }
+  }
+  
+  service_config {
+    min_instance_count = 0
+    max_instance_count = 100
+    available_memory   = "256M"
+    available_cpu      = "0.1666"
+    timeout_seconds    = 540
+    max_instance_request_concurrency = 1
+    all_traffic_on_latest_revision = true
+    ingress_settings = "ALLOW_ALL"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
+    
+    environment_variables = {
+      DATASET_ID       = "weather_analytics"
+      LOG_EXECUTION_ID = "true"
+      PROJECT_ID       = "weather-etl-pipeline-464514"
+    }
+  }
+  
+  event_trigger {
+    trigger_region = "us-central1"
+    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
+>>>>>>> parent of 274c7a4 (nuevo apply)
     pubsub_topic   = google_pubsub_topic.weather_topic.id
     retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
   }
@@ -216,6 +267,8 @@ resource "google_pubsub_topic" "weather_topic" {
   project = "weather-etl-pipeline-464514"
 }
 
+# Agrega estos recursos a tu main.tf existente
+
 # Dataset para logs
 resource "google_bigquery_dataset" "etl_logs" {
   dataset_id = "etl_logs"
@@ -251,17 +304,4 @@ resource "google_monitoring_notification_channel" "email" {
   labels = {
     email_address = var.notification_email
   }
-}
-
-# ✅ AGREGAR OUTPUTS
-output "bucket_name" {
-  value = google_storage_bucket.weather_data_bucket.name
-}
-
-output "bigquery_dataset" {
-  value = google_bigquery_dataset.weather_dataset.dataset_id
-}
-
-output "pubsub_topic" {
-  value = google_pubsub_topic.weather_topic.name
 }
