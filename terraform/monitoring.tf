@@ -7,15 +7,6 @@ resource "time_sleep" "wait_for_metrics" {
   create_duration = "10m"
 }
 
-# Notification channel
-resource "google_monitoring_notification_channel" "email" {
-  display_name = "Email Notifications"
-  type         = "email"
-  labels = {
-    email_address = var.notification_email
-  }
-}
-
 resource "google_monitoring_dashboard" "weather_etl_dashboard" {
   depends_on = [time_sleep.wait_for_metrics]
   
