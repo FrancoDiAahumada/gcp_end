@@ -175,6 +175,20 @@ resource "google_monitoring_notification_channel" "email" {
   }
 }
 
+resource "google_project_service" "monitoring_api" {
+  project = var.project_id
+  service = "monitoring.googleapis.com"
+  
+  disable_dependent_services = true
+}
+
+resource "google_project_service" "logging_api" {
+  project = var.project_id
+  service = "logging.googleapis.com"
+  
+  disable_dependent_services = true
+}
+
 # ✅ AGREGAR OUTPUTS
 output "bucket_name" {
   value = google_storage_bucket.weather_data_bucket.name
@@ -186,4 +200,19 @@ output "bigquery_dataset" {
 
 output "pubsub_topic" {
   value = google_pubsub_topic.weather_topic.name
+}
+
+output "monitoring_dashboard_url" {
+  value = google_monitoring_dashboard.weather_etl_dashboard.id != "" ? "https://console.cloud.google.com/monitoring/dashboards/custom/${google_monitoring_dashboard.weather_etl_dashboard.id}?project=${var.project_id}" : "Dashboard not created"
+  description = "URL del dashboard de monitoreo"
+}
+
+output "cloud_console_urls" {
+  value = {
+    dashboard = "https://console.cloud.google.com/monitoring/dashboards?project=${var.project_id}"
+    logs      = "https://console.cloud.google.com/logs/query?project=${var.project_id}"
+    functions = "https://console.cloud.google.com/functions/list?project=${var.project_id}"
+    bigquery  = "https://console.cloud.google.com/bigquery?project=${var.project_id}"
+  }
+  description = "URLs útiles de GCP Console"
 }

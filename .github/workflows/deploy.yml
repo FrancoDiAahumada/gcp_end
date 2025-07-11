@@ -138,3 +138,10 @@ jobs:
         echo "   - weather_transform (Gen2)" 
         echo "📊 Infraestructura de monitoreo configurada"
         echo "✉️ Alertas por email configuradas"
+
+    - name: Display Dashboard URLs
+      run: |
+        echo "🎯 Dashboard URLs:"
+        terraform output -json cloud_console_urls | jq -r 'to_entries[] | "- \(.key): \(.value)"'
+        echo "📊 Main Dashboard:"
+        terraform output monitoring_dashboard_url
