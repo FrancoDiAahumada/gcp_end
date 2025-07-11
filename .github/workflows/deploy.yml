@@ -40,11 +40,12 @@ jobs:
     - name: Enable required APIs
       run: |
         echo "Habilitando APIs necesarias..."
-        gcloud services enable cloudfunctions.googleapis.com
-        gcloud services enable cloudbuild.googleapis.com
-        gcloud services enable logging.googleapis.com
-        gcloud services enable monitoring.googleapis.com
-        gcloud services enable bigquery.googleapis.com
+        gcloud services enable cloudfunctions.googleapis.com || echo "⚠️ No se pudo habilitar Cloud Functions API"
+        gcloud services enable cloudbuild.googleapis.com || echo "⚠️ No se pudo habilitar Cloud Build API"
+        gcloud services enable logging.googleapis.com || echo "⚠️ No se pudo habilitar Logging API"
+        gcloud services enable monitoring.googleapis.com || echo "⚠️ No se pudo habilitar Monitoring API"
+        gcloud services enable bigquery.googleapis.com || echo "⚠️ No se pudo habilitar BigQuery API"
+        echo "✅ Intento de habilitación de APIs completado"
     
     - name: Deploy Weather Extract Function
       run: |
