@@ -85,7 +85,7 @@ terraform plan
 terraform apply
 ```
 
-> Si los recursos ya existen en GCP, se pueden importar para evitar errores 409:
+> Si los recursos ya existen en GCP, se pueden importar para evitar errores 4009:
 
 ```bash
 terraform import google_bigquery_dataset.weather_dataset your-project-id:weather_analytics
