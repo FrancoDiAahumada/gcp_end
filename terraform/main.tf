@@ -12,6 +12,7 @@ terraform {
     }
   }
   
+  # ✅ AGREGAR ESTA CONFIGURACIÓN DE BACKEND
   backend "gcs" {
     bucket = "weather-etl-terraform-state-464514"
     prefix = "terraform/state"
@@ -87,46 +88,10 @@ resource "google_storage_bucket" "weather_data_bucket" {
 
 # Crea un dataset de BigQuery para almacenar datos meteorológicos
 resource "google_bigquery_dataset" "weather_dataset" {
-  depends_on = [time_sleep.wait_for_apis]
-  
-  dataset_id = var.dataset_name
-  location   = var.region
-  project    = var.project_id
-  
-  # Configuración de acceso
-  access {
-    role          = "OWNER"
-    user_by_email = var.notification_email
-  }
+  dataset_id = var.dataset_name                                # ID del dataset, definido por una variable
+  location   = var.region                                      # Región donde se crea el dataset
 }
 
-# Dataset para logs
-resource "google_bigquery_dataset" "etl_logs" {
-  depends_on = [time_sleep.wait_for_apis]
-  
-  dataset_id = "etl_logs"
-  location   = "US"
-  project    = var.project_id
-  
-  # Configuración de acceso
-  access {
-    role          = "OWNER"
-    user_by_email = var.notification_email
-  }
-}
-
-# Topic de Pub/Sub
-resource "google_pubsub_topic" "weather_topic" {
-  depends_on = [time_sleep.wait_for_apis]
-  
-  name    = "weather-trigger"
-  project = var.project_id
-  
-  # Configuración de retención de mensajes
-  message_retention_duration = "86400s"  # 24 horas
-}
-
-# Función Cloud Function para extraer datos
 resource "google_cloudfunctions2_function" "weather_extract" {
   depends_on = [
     time_sleep.wait_for_apis,
@@ -145,8 +110,8 @@ resource "google_cloudfunctions2_function" "weather_extract" {
     
     source {
       storage_source {
-        bucket = "gcf-v2-sources-990904885293-us-central1"
-        object = "weather-etl-extract/function-source.zip"
+        bucket     = "gcf-v2-sources-990904885293-us-central1"
+        object     = "weather-etl-extract/function-source.zip"
       }
     }
   }
@@ -161,7 +126,7 @@ resource "google_cloudfunctions2_function" "weather_extract" {
     all_traffic_on_latest_revision = true
     ingress_settings = "ALLOW_ALL"
     
-    environment_variables = {
+environment_variables = {
       BUCKET_NAME           = var.bucket_name
       DATASET_ID           = var.dataset_name
       LOG_EXECUTION_ID     = "true"
@@ -189,6 +154,7 @@ resource "google_cloudfunctions2_function" "weather_extract" {
   }
 }
 
+
 # Función Cloud Function para transformar datos
 resource "google_cloudfunctions2_function" "weather_transform" {
   depends_on = [
@@ -210,6 +176,7 @@ resource "google_cloudfunctions2_function" "weather_transform" {
       storage_source {
         bucket = "gcf-v2-sources-990904885293-us-central1"
         object = "weather-etl-transform/function-source.zip"
+        # generation = "1751904491030691" - Omitido para evitar errores de formato
       }
     }
   }
@@ -239,15 +206,21 @@ resource "google_cloudfunctions2_function" "weather_transform" {
   }
 
   labels = {
-    deployment-tool = "terraform"
-    environment     = "production"
+    deployment-tool = "cli-gcloud"
   }
-  
-  timeouts {
-    create = "15m"
-    update = "15m"
-    delete = "10m"
-  }
+}
+
+# También necesitas importar el topic de Pub/Sub
+resource "google_pubsub_topic" "weather_topic" {
+  name    = "weather-trigger"
+  project = "weather-etl-pipeline-464514"
+}
+
+# Dataset para logs
+resource "google_bigquery_dataset" "etl_logs" {
+  dataset_id = "etl_logs"
+  location   = "US"
+  project    = var.project_id
 }
 
 # Sink para logs
@@ -270,16 +243,17 @@ resource "google_logging_project_sink" "logs_to_bigquery" {
 }
 
 # Canal de notificación por email
-# resource "google_monitoring_notification_channel" "email" {
-#   display_name = "Alerta de correo"
-#   type         = "email"
-#   labels = {
-#     email_address = "tucorreo@ejemplo.cl"
-#   }
-# }
+resource "google_monitoring_notification_channel" "email" {
+  display_name = "Alertas ETL por correo"
+  type         = "email"
+  project      = var.project_id
+  
+  labels = {
+    email_address = var.notification_email
+  }
+}
 
-
-# Outputs
+# ✅ AGREGAR OUTPUTS
 output "bucket_name" {
   value = google_storage_bucket.weather_data_bucket.name
 }
@@ -290,14 +264,4 @@ output "bigquery_dataset" {
 
 output "pubsub_topic" {
   value = google_pubsub_topic.weather_topic.name
-}
-
-output "cloud_console_urls" {
-  value = {
-    dashboard = "https://console.cloud.google.com/monitoring/dashboards?project=${var.project_id}"
-    logs      = "https://console.cloud.google.com/logs/query?project=${var.project_id}"
-    functions = "https://console.cloud.google.com/functions/list?project=${var.project_id}"
-    bigquery  = "https://console.cloud.google.com/bigquery?project=${var.project_id}"
-  }
-  description = "URLs útiles de GCP Console"
 }
