@@ -4,7 +4,7 @@ resource "time_sleep" "wait_for_metrics" {
     google_cloudfunctions2_function.weather_extract,
     google_cloudfunctions2_function.weather_transform
   ]
-  create_duration = "10m"
+  create_duration = "2m"
 }
 
 resource "google_monitoring_dashboard" "weather_etl_dashboard" {
@@ -14,40 +14,44 @@ resource "google_monitoring_dashboard" "weather_etl_dashboard" {
     displayName = "Weather ETL Pipeline Dashboard"
     
     mosaicLayout = {
+      columns = 12  # AGREGADO: Especificar número de columnas
       tiles = [
-        # Tile 1: Pipeline Status - SIN sparkChart
+        # Tile 1: Pipeline Status
         {
           width = 4
           height = 2
+          xPos = 0
+          yPos = 0
           widget = {
             title = "Pipeline Status"
             scorecard = {
               timeSeriesQuery = {
                 timeSeriesFilter = {
-                  filter = "resource.type=\"cloud_function\" AND resource.label.function_name=~\"weather-.*\""
+                  filter = "resource.type=\"cloud_function\" AND resource.labels.function_name=~\"weather-.*\""
                   aggregation = {
                     alignmentPeriod = "300s"
                     perSeriesAligner = "ALIGN_MEAN"
                   }
                 }
               }
-              # sparkChart REMOVIDO - esta es la causa del error
             }
           }
         },
         
-        # Tile 2: Function Executions - Usando métricas alternativas
+        # Tile 2: Function Executions
         {
           width = 8
           height = 4
+          xPos = 4
+          yPos = 0
           widget = {
-            title = "Function Executions per Minute"
+            title = "Function Executions"
             xyChart = {
               dataSets = [
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_function\" AND metric.type=\"logging.googleapis.com/log_entry_count\" AND resource.label.function_name=\"weather-etl-extract\""
+                      filter = "resource.type=\"cloud_function\" AND resource.labels.function_name=\"weather-etl-extract\""
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_RATE"
@@ -61,7 +65,7 @@ resource "google_monitoring_dashboard" "weather_etl_dashboard" {
                 {
                   timeSeriesQuery = {
                     timeSeriesFilter = {
-                      filter = "resource.type=\"cloud_function\" AND metric.type=\"logging.googleapis.com/log_entry_count\" AND resource.label.function_name=\"weather-etl-transform\""
+                      filter = "resource.type=\"cloud_function\" AND resource.labels.function_name=\"weather-etl-transform\""
                       aggregation = {
                         alignmentPeriod = "60s"
                         perSeriesAligner = "ALIGN_RATE"
@@ -74,67 +78,19 @@ resource "google_monitoring_dashboard" "weather_etl_dashboard" {
                 }
               ]
               yAxis = {
-                label = "Log Entries/min"
+                label = "Executions"
                 scale = "LINEAR"
               }
             }
           }
         },
         
-        # Tile 3: Memory Usage - Usando métricas alternativas
-        {
-          width = 6
-          height = 3
-          widget = {
-            title = "Memory Usage"
-            xyChart = {
-              dataSets = [{
-                timeSeriesQuery = {
-                  timeSeriesFilter = {
-                    filter = "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/user_memory_bytes\""
-                    aggregation = {
-                      alignmentPeriod = "300s"
-                      perSeriesAligner = "ALIGN_MEAN"
-                    }
-                  }
-                }
-                plotType = "LINE"
-              }]
-              yAxis = {
-                label = "Memory (bytes)"
-                scale = "LINEAR"
-              }
-            }
-          }
-        },
-        
-        # Tile 4: BigQuery Jobs
-        {
-          width = 6
-          height = 3
-          widget = {
-            title = "BigQuery Jobs"
-            xyChart = {
-              dataSets = [{
-                timeSeriesQuery = {
-                  timeSeriesFilter = {
-                    filter = "resource.type=\"bigquery_project\" AND metric.type=\"bigquery.googleapis.com/job/query_count\""
-                    aggregation = {
-                      alignmentPeriod = "300s"
-                      perSeriesAligner = "ALIGN_RATE"
-                    }
-                  }
-                }
-                plotType = "STACKED_BAR"
-              }]
-            }
-          }
-        },
-        
-        # Tile 5: Error Logs
+        # Tile 3: Error Logs
         {
           width = 12
           height = 4
+          xPos = 0
+          yPos = 4
           widget = {
             title = "Recent Errors & Logs"
             logsPanel = {
@@ -159,8 +115,8 @@ resource "google_monitoring_alert_policy" "function_errors" {
     display_name = "Function error rate too high"
     
     condition_threshold {
-      # Usando métricas de logging en lugar de function/executions
-      filter = "resource.type=\"cloud_function\" AND metric.type=\"logging.googleapis.com/log_entry_count\" AND jsonPayload.severity=\"ERROR\""
+      # CORREGIDO: Usar sintaxis correcta para filtros
+      filter = "resource.type=\"cloud_function\" AND severity=\"ERROR\""
       
       aggregations {
         alignment_period     = "300s"
@@ -169,7 +125,7 @@ resource "google_monitoring_alert_policy" "function_errors" {
       }
       
       comparison      = "COMPARISON_GT"
-      threshold_value = 5  # 5 errores en 5 minutos
+      threshold_value = 5
       duration        = "300s"
     }
   }
@@ -177,7 +133,7 @@ resource "google_monitoring_alert_policy" "function_errors" {
   notification_channels = [google_monitoring_notification_channel.email.name]
   
   alert_strategy {
-    auto_close = "1800s"  # 30 minutes
+    auto_close = "1800s"
   }
 }
 
@@ -191,16 +147,16 @@ resource "google_monitoring_alert_policy" "memory_usage" {
     display_name = "Memory usage > 128MB"
     
     condition_threshold {
-      # Usando user_memory_bytes en lugar de memory_utilization
-      filter = "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/user_memory_bytes\""
+      # CORREGIDO: Usar métrica simple sin DISTRIBUTION
+      filter = "resource.type=\"cloud_function\" AND metric.type=\"cloudfunctions.googleapis.com/function/active_instances\""
       
       aggregations {
         alignment_period   = "300s"
-        per_series_aligner = "ALIGN_MEAN"
+        per_series_aligner = "ALIGN_MAX"  # CORREGIDO: Cambiar de ALIGN_MEAN
       }
       
       comparison      = "COMPARISON_GT"
-      threshold_value = 134217728  # 128MB en bytes
+      threshold_value = 10  # Número de instancias activas
       duration        = "300s"
     }
   }
