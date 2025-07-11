@@ -193,14 +193,8 @@ resource "google_monitoring_alert_policy" "memory_usage" {
   notification_channels = [google_monitoring_notification_channel.email.name]
 }
 
-resource "google_monitoring_notification_channel" "email" {
-  display_name = "Email Alerts"
-  type         = "email"
-  
-  labels = {
-    email_address = var.alert_email
-  }
-}
+
+
 
 # Output del dashboard URL
 output "dashboard_url" {
