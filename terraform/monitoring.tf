@@ -240,15 +240,15 @@ resource "google_monitoring_alert_policy" "execution_time" {
   notification_channels = [google_monitoring_notification_channel.email.name]
 }
 
-# Canal de notificación por email
-resource "google_monitoring_notification_channel" "email" {
-  display_name = "Email Notification Channel"
-  type         = "email"
-  
-  labels = {
-    email_address = var.notification_email
-  }
-}
+# Canal de notificación por email - YA EXISTE EN main.tf
+# resource "google_monitoring_notification_channel" "email" {
+#   display_name = "Email Notification Channel"
+#   type         = "email"
+#   
+#   labels = {
+#     email_address = var.notification_email
+#   }
+# }
 
 # Output del dashboard URL
 output "dashboard_url" {
