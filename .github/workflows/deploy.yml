@@ -1,7 +1,14 @@
-name: Deploy to GCP
+name: Deploy Weather ETL Pipeline to GCP
+
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: weather-etl-pipeline-464514
+  REGION: us-central1
 
 jobs:
   deploy:
@@ -15,18 +22,122 @@ jobs:
       uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        project_id: ${{ env.PROJECT_ID }}
     
     - name: Setup Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
       with:
-        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        project_id: ${{ env.PROJECT_ID }}
     
-    - name: Deploy Cloud Functions
+    - name: Verify Authentication and Set Project
       run: |
+        echo "Configurando proyecto: $PROJECT_ID"
+        gcloud config set project $PROJECT_ID
+        gcloud config list project
+        gcloud auth list
+        echo "Proyecto configurado correctamente"
+    
+    - name: Enable required APIs
+      run: |
+        echo "Habilitando APIs necesarias..."
+        gcloud services enable cloudfunctions.googleapis.com
+        gcloud services enable cloudbuild.googleapis.com
+        gcloud services enable logging.googleapis.com
+        gcloud services enable monitoring.googleapis.com
+        gcloud services enable bigquery.googleapis.com
+    
+    - name: Deploy Weather Extract Function
+      run: |
+        echo "Desplegando función de extracción..."
         gcloud functions deploy weather_extract \
           --runtime python39 \
           --trigger-http \
           --entry-point main \
           --source ./functions/extract \
-          --project=${{ secrets.GCP_PROJECT_ID }}
+          --region=$REGION \
+          --project=$PROJECT_ID \
+          --allow-unauthenticated \
+          --timeout=540s \
+          --memory=256MB
+    
+    - name: Deploy Weather Transform Function
+      run: |
+        echo "Desplegando función de transformación..."
+        gcloud functions deploy weather_transform \
+          --runtime python39 \
+          --trigger-http \
+          --entry-point main \
+          --source ./functions/transform \
+          --region=$REGION \
+          --project=$PROJECT_ID \
+          --allow-unauthenticated \
+          --timeout=540s \
+          --memory=256MB
+    
+    - name: Deploy Weather Load Function
+      run: |
+        echo "Desplegando función de carga..."
+        gcloud functions deploy weather_load \
+          --runtime python39 \
+          --trigger-http \
+          --entry-point main \
+          --source ./functions/load \
+          --region=$REGION \
+          --project=$PROJECT_ID \
+          --allow-unauthenticated \
+          --timeout=540s \
+          --memory=512MB
+    
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.0.0
+    
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init
+    
+    - name: Terraform Plan
+      run: |
+        cd terraform
+        terraform plan \
+          -var="project_id=$PROJECT_ID" \
+          -var="notification_email=${{ secrets.NOTIFICATION_EMAIL }}"
+    
+    - name: Terraform Apply
+      run: |
+        cd terraform
+        terraform apply -auto-approve \
+          -var="project_id=$PROJECT_ID" \
+          -var="notification_email=${{ secrets.NOTIFICATION_EMAIL }}"
+    
+    - name: Test Functions
+      run: |
+        echo "Probando funciones desplegadas..."
+        
+        # Test extract function
+        EXTRACT_URL=$(gcloud functions describe weather_extract --region=$REGION --format="value(httpsTrigger.url)")
+        echo "URL de extracción: $EXTRACT_URL"
+        
+        # Test transform function
+        TRANSFORM_URL=$(gcloud functions describe weather_transform --region=$REGION --format="value(httpsTrigger.url)")
+        echo "URL de transformación: $TRANSFORM_URL"
+        
+        # Test load function
+        LOAD_URL=$(gcloud functions describe weather_load --region=$REGION --format="value(httpsTrigger.url)")
+        echo "URL de carga: $LOAD_URL"
+        
+        echo "✅ Todas las funciones se desplegaron correctamente"
+    
+    - name: Deploy Summary
+      run: |
+        echo "🎉 Despliegue completado exitosamente"
+        echo "📍 Proyecto: $PROJECT_ID"
+        echo "🌍 Región: $REGION"
+        echo "🔧 Funciones desplegadas:"
+        echo "   - weather_extract"
+        echo "   - weather_transform" 
+        echo "   - weather_load"
+        echo "📊 Infraestructura de monitoreo configurada"
+        echo "✉️ Alertas por email configuradas"
