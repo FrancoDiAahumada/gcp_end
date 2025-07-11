@@ -1,8 +1,8 @@
 # Delay para esperar que las métricas estén disponibles
 resource "time_sleep" "wait_for_metrics" {
   depends_on = [
-    google_cloudfunctions_function.weather_extract,
-    google_cloudfunctions_function.weather_transform
+    google_cloudfunctions2_function.weather_extract,
+    google_cloudfunctions2_function.weather_transform
   ]
   create_duration = "10m"
 }
