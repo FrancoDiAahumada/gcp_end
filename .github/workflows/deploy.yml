@@ -59,8 +59,9 @@ jobs:
           --project=$PROJECT_ID \
           --allow-unauthenticated \
           --timeout=540s \
-          --memory=256MB \
-          --gen2
+          --memory=512MB \
+          --gen2 \
+          --set-env-vars PROJECT_ID=$PROJECT_ID,BUCKET_NAME=weather-etl-bucket,DATASET_ID=weather_analytics,OPENWEATHER_API_KEY=${{ secrets.OPENWEATHER_API_KEY }}
     
     - name: Deploy Weather Transform Function
       run: |
@@ -129,4 +130,4 @@ jobs:
         echo "   - weather_extract (Gen2)"
         echo "   - weather_transform (Gen2)" 
         echo "📊 Infraestructura de monitoreo configurada"
-        echo "✉️ Alertas por email configuradas 2"
+        echo "✉️ Alertas por email configuradas"

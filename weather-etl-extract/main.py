@@ -6,6 +6,7 @@ from datetime import datetime
 import functions_framework
 import logging
 import os
+from flask import jsonify
 
 # ✅ NUEVO: Configurar logging estructurado para monitoreo
 from google.cloud import logging as cloud_logging
@@ -15,9 +16,9 @@ cloud_logging.Client().setup_logging()
 logger = logging.getLogger(__name__)
 
 # Configuración desde variables de entorno
-API_KEY = os.environ.get('OPENWEATHER_API_KEY')
-BUCKET_NAME = os.environ.get('BUCKET_NAME')
-PROJECT_ID = os.environ.get('PROJECT_ID')
+API_KEY = os.environ.get('OPENWEATHER_API_KEY', 'demo-key')
+BUCKET_NAME = os.environ.get('BUCKET_NAME', 'weather-etl-bucket')
+PROJECT_ID = os.environ.get('PROJECT_ID', 'weather-etl-pipeline-464514')
 DATASET_ID = os.environ.get('DATASET_ID', 'weather_analytics')
 
 # Lista de ciudades para consultar
@@ -34,9 +35,9 @@ def convert_datetimes_to_str(data_list):
                 item[key] = value.isoformat()
     return data_list
 
-@functions_framework.cloud_event
-def extract_weather_data(cloud_event):
-    """Extrae datos meteorológicos de OpenWeatherMap API"""
+@functions_framework.http
+def main(request):
+    """Función HTTP para extraer datos meteorológicos de OpenWeatherMap API"""
     
     # ✅ NUEVO: Logging de inicio con timestamp
     start_time = datetime.utcnow()
@@ -73,7 +74,7 @@ def extract_weather_data(cloud_event):
                     'units': 'metric'
                 }
                 
-                response = requests.get(url, timeout=30)  # ✅ CAMBIO: GET en lugar de POST
+                response = requests.get(url, timeout=30)
                 response.raise_for_status()
                 data = response.json()
                 
@@ -138,7 +139,10 @@ def extract_weather_data(cloud_event):
                 'failed_extractions': len(CITIES),
                 'status': 'critical_failure'
             })
-            raise Exception("No se pudo extraer información meteorológica")
+            return jsonify({
+                'status': 'error',
+                'message': 'No se pudo extraer información meteorológica'
+            }), 500
         
         # Aseguramos que no haya objetos datetime sin convertir
         extracted_data = convert_datetimes_to_str(extracted_data)
@@ -163,7 +167,10 @@ def extract_weather_data(cloud_event):
                 'error_type': 'storage_error',
                 'status': 'storage_failed'
             })
-            raise
+            return jsonify({
+                'status': 'error',
+                'message': f'Error guardando en Storage: {str(e)}'
+            }), 500
 
         # ✅ NUEVO: Log antes de cargar a BigQuery
         logger.info(f"📊 WEATHER-ETL: Cargando datos a BigQuery")
@@ -202,7 +209,10 @@ def extract_weather_data(cloud_event):
                 'error_message': str(e),
                 'status': 'bq_failed'
             })
-            raise
+            return jsonify({
+                'status': 'error',
+                'message': f'Error cargando a BigQuery: {str(e)}'
+            }), 500
 
         # ✅ NUEVO: Log de resumen final con métricas
         end_time = datetime.utcnow()
@@ -220,6 +230,22 @@ def extract_weather_data(cloud_event):
             'status': 'complete_success'
         })
         
+        # Respuesta HTTP exitosa
+        return jsonify({
+            'status': 'success',
+            'message': 'Extracción de datos meteorológicos completada',
+            'data': {
+                'execution_time_seconds': execution_time,
+                'cities_processed': len(CITIES),
+                'successful_extractions': successful_extractions,
+                'failed_extractions': failed_extractions,
+                'success_rate': round((successful_extractions / len(CITIES)) * 100, 2),
+                'records_stored': len(extracted_data),
+                'storage_path': blob_name,
+                'bq_table': f"{DATASET_ID}.raw_weather"
+            }
+        }), 200
+        
     except Exception as e:
         # ✅ NUEVO: Log de error crítico
         end_time = datetime.utcnow()
@@ -232,7 +258,8 @@ def extract_weather_data(cloud_event):
             'status': 'critical_failure'
         })
         
-        # Re-lanzar el error para que Cloud Functions lo detecte
-        raise
-    
-    # ✅ REMOVIDO: Los logging.info simples (reemplazados por logger.info estructurado)
+        # Respuesta HTTP de error
+        return jsonify({
+            'status': 'error',
+            'message': f'Error crítico: {str(e)}'
+        }), 500
