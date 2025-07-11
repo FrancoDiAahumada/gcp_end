@@ -26,3 +26,8 @@ variable "openweather_api_key" {
   type        = string
   description = "API key para OpenWeather"
 }
+
+variable "notification_email" {
+  description = "Correo para recibir alertas de monitoreo"
+  type        = string
+}
