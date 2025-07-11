@@ -12,13 +12,14 @@ logger = logging.getLogger(__name__)
 PROJECT_ID = os.environ.get('PROJECT_ID')
 DATASET_ID = os.environ.get('DATASET_ID', 'weather_analytics')
 
-@functions_framework.cloud_event
-def transform_weather_data(cloud_event):
+@functions_framework.http
+def main(request):
+    """HTTP Cloud Function para transformar datos meteorológicos"""
     try:
         logger.info("🟢 ETL-TRANSFORM: Iniciando transformación")
-
+        
         client = bigquery.Client()
-
+        
         query = f"""
         CREATE OR REPLACE TABLE `{PROJECT_ID}.{DATASET_ID}.clean_weather` AS
         SELECT
@@ -42,19 +43,29 @@ def transform_weather_data(cloud_event):
             DATETIME(extraction_timestamp) AS ingestion_datetime
         FROM `{PROJECT_ID}.{DATASET_ID}.raw_weather`
         """
-
+        
         job = client.query(query)
         job.result()
-
-        # Puedes obtener el número de filas procesadas si lo necesitas
+        
+        # Obtener el número de filas procesadas
         processed_count = job.num_dml_affected_rows if hasattr(job, 'num_dml_affected_rows') else None
-
+        
         logger.info(f"✅ ETL-TRANSFORM: Completado - {processed_count if processed_count is not None else 'N/A'} registros")
-
-        return {
+        
+        response = {
+            "status": "success",
             "message": "Transformación completada exitosamente",
+            "processed_rows": processed_count,
             "timestamp": datetime.datetime.utcnow().isoformat()
         }
+        
+        return response, 200
+        
     except Exception as e:
         logger.error(f"🚨 ETL-TRANSFORM: Error - {str(e)}")
-        raise
+        error_response = {
+            "status": "error",
+            "message": f"Error en transformación: {str(e)}",
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }
+        return error_response, 500
