@@ -4,80 +4,29 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.44.0"  # Versión específica estable
+      version = "~> 5.44.0"  # Versión 5.x estable sin el bug
     }
-    time = {
-      source  = "hashicorp/time"
-      version = "~> 0.9.1"
-    }
+  }
+  
+  # ✅ AGREGAR ESTA CONFIGURACIÓN DE BACKEND
+  backend "gcs" {
+    bucket = "weather-etl-terraform-state-464514"
+    prefix = "terraform/state"
   }
 }
 
-# Configura el proveedor de Google Cloud con timeouts aumentados
+# Configura el proveedor de Google Cloud con el proyecto y la región especificados en las variables
 provider "google" {
   project = var.project_id
   region  = var.region
-  
-  # Configuración de timeouts para evitar errores de plugin
-  request_timeout = "60s"
-  
-  # Configuración de retry
-  batching {
-    enable_batching = true
-    send_after      = "10s"
-  }
-}
-
-# Habilitar APIs necesarias PRIMERO
-resource "google_project_service" "required_apis" {
-  for_each = toset([
-    "cloudfunctions.googleapis.com",
-    "bigquery.googleapis.com",
-    "storage.googleapis.com",
-    "pubsub.googleapis.com",
-    "monitoring.googleapis.com",
-    "logging.googleapis.com",
-    "cloudbuild.googleapis.com",
-    "artifactregistry.googleapis.com"
-  ])
-  
-  project = var.project_id
-  service = each.value
-  
-  disable_dependent_services = false
-  disable_on_destroy        = false
-  
-  timeouts {
-    create = "10m"
-    update = "10m"
-    delete = "10m"
-  }
-}
-
-# Delay para asegurar que las APIs estén completamente habilitadas
-resource "time_sleep" "wait_for_apis" {
-  depends_on = [google_project_service.required_apis]
-  create_duration = "30s"
 }
 
 # Crea un bucket de Google Cloud Storage para almacenar datos meteorológicos
 resource "google_storage_bucket" "weather_data_bucket" {
-  depends_on = [time_sleep.wait_for_apis]
-  
-  name                        = var.bucket_name
-  location                    = var.region
-  force_destroy               = true
-  uniform_bucket_level_access = true
-  
-  # Configuración de lifecycle para evitar costos
-  lifecycle_rule {
-    condition {
-      age = 30
-    }
-    action {
-      type = "Delete"
-    }
-  }
+  name                        = var.bucket_name                # Nombre del bucket, definido por una variable
+  location                    = var.region                     # Región donde se crea el bucket
+  force_destroy               = true                           # Permite eliminar el bucket aunque tenga objetos
+  uniform_bucket_level_access = true                           # Acceso uniforme a nivel de bucket
 }
 
 # Crea un dataset de BigQuery para almacenar datos meteorológicos
@@ -86,47 +35,41 @@ resource "google_bigquery_dataset" "weather_dataset" {
   location   = var.region                                      # Región donde se crea el dataset
 }
 
-
 resource "google_cloudfunctions2_function" "weather_extract" {
-  depends_on = [
-    time_sleep.wait_for_apis,
-    google_storage_bucket.weather_data_bucket,
-    google_bigquery_dataset.weather_dataset
-  ]
-  
   name     = "weather-etl-extract"
   location = "us-central1"
-  project  = var.project_id
+  project  = "weather-etl-pipeline-464514"
   
   build_config {
     runtime     = "python311"
     entry_point = "extract_weather_data"
-    docker_repository = "projects/${var.project_id}/locations/us-central1/repositories/gcf-artifacts"
+    docker_repository = "projects/weather-etl-pipeline-464514/locations/us-central1/repositories/gcf-artifacts"
+    service_account = "projects/weather-etl-pipeline-464514/serviceAccounts/990904885293-compute@developer.gserviceaccount.com"
     
     source {
       storage_source {
         bucket     = "gcf-v2-sources-990904885293-us-central1"
         object     = "weather-etl-extract/function-source.zip"
-
       }
     }
   }
   
   service_config {
     min_instance_count = 0
-    max_instance_count = 10
+    max_instance_count = 100
     available_memory   = "256M"
     available_cpu      = "0.1666"
     timeout_seconds    = 540
     max_instance_request_concurrency = 1
     all_traffic_on_latest_revision = true
     ingress_settings = "ALLOW_ALL"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
     
-environment_variables = {
+    environment_variables = {
       BUCKET_NAME           = var.bucket_name
       DATASET_ID           = var.dataset_name
       LOG_EXECUTION_ID     = "true"
-      OPENWEATHER_API_KEY  = var.openweather_api_key
+      OPENWEATHER_API_KEY  = var.openweather_api_key  # ✅ Usando variable
       PROJECT_ID           = var.project_id
     }
   }
@@ -134,8 +77,6 @@ environment_variables = {
   event_trigger {
     trigger_region = "us-central1"
     event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
-<<<<<<< HEAD
-=======
     pubsub_topic   = "projects/weather-etl-pipeline-464514/topics/weather-trigger"
     retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
     service_account_email = "990904885293-compute@developer.gserviceaccount.com"
@@ -145,7 +86,6 @@ environment_variables = {
     deployment-tool = "cli-gcloud"
   }
 }
-
 
 resource "google_cloudfunctions2_function" "weather_transform" {
   name     = "weather-etl-transform"
@@ -162,7 +102,6 @@ resource "google_cloudfunctions2_function" "weather_transform" {
       storage_source {
         bucket = "gcf-v2-sources-990904885293-us-central1"
         object = "weather-etl-transform/function-source.zip"
-        # generation = "1751904491030691" - Omitido para evitar errores de formato
       }
     }
   }
@@ -188,72 +127,9 @@ resource "google_cloudfunctions2_function" "weather_transform" {
   event_trigger {
     trigger_region = "us-central1"
     event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
->>>>>>> parent of 274c7a4 (nuevo apply)
     pubsub_topic   = google_pubsub_topic.weather_topic.id
     retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
-  }
-
-  labels = {
-    deployment-tool = "terraform"
-    environment     = "production"
-  }
-  
-  timeouts {
-    create = "15m"
-    update = "15m"
-    delete = "10m"
-  }
-}
-
-
-# Función Cloud Function para transformar datos
-resource "google_cloudfunctions2_function" "weather_transform" {
-  depends_on = [
-    time_sleep.wait_for_apis,
-    google_storage_bucket.weather_data_bucket,
-    google_bigquery_dataset.weather_dataset
-  ]
-  
-  name     = "weather-etl-transform"
-  location = "us-central1"
-  project  = var.project_id
-  
-  build_config {
-    runtime     = "python311"
-    entry_point = "transform_weather_data"
-    docker_repository = "projects/${var.project_id}/locations/us-central1/repositories/gcf-artifacts"
-    
-    source {
-      storage_source {
-        bucket = "gcf-v2-sources-990904885293-us-central1"
-        object = "weather-etl-transform/function-source.zip"
-        # generation = "1751904491030691" - Omitido para evitar errores de formato
-      }
-    }
-  }
-  
-  service_config {
-    min_instance_count = 0
-    max_instance_count = 10
-    available_memory   = "256M"
-    available_cpu      = "0.1666"
-    timeout_seconds    = 540
-    max_instance_request_concurrency = 1
-    all_traffic_on_latest_revision = true
-    ingress_settings = "ALLOW_ALL"
-    
-    environment_variables = {
-      DATASET_ID       = var.dataset_name
-      LOG_EXECUTION_ID = "true"
-      PROJECT_ID       = var.project_id
-    }
-  }
-  
-  event_trigger {
-    trigger_region = "us-central1"
-    event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
-    pubsub_topic   = google_pubsub_topic.weather_topic.id
-    retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
+    service_account_email = "990904885293-compute@developer.gserviceaccount.com"
   }
 
   labels = {
@@ -267,8 +143,6 @@ resource "google_pubsub_topic" "weather_topic" {
   project = "weather-etl-pipeline-464514"
 }
 
-# Agrega estos recursos a tu main.tf existente
-
 # Dataset para logs
 resource "google_bigquery_dataset" "etl_logs" {
   dataset_id = "etl_logs"
@@ -278,14 +152,9 @@ resource "google_bigquery_dataset" "etl_logs" {
 
 # Sink para logs
 resource "google_logging_project_sink" "logs_to_bigquery" {
-  depends_on = [
-    google_bigquery_dataset.etl_logs,
-    time_sleep.wait_for_apis
-  ]
-  
   name        = "logs-to-bq"
   destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/etl_logs"
-  filter      = "resource.type=cloud_function AND resource.labels.function_name=~\"weather-.*\""
+  filter      = "resource.type=cloud_function"
   project     = var.project_id
   
   unique_writer_identity = true
@@ -304,4 +173,17 @@ resource "google_monitoring_notification_channel" "email" {
   labels = {
     email_address = var.notification_email
   }
+}
+
+# ✅ AGREGAR OUTPUTS
+output "bucket_name" {
+  value = google_storage_bucket.weather_data_bucket.name
+}
+
+output "bigquery_dataset" {
+  value = google_bigquery_dataset.weather_dataset.dataset_id
+}
+
+output "pubsub_topic" {
+  value = google_pubsub_topic.weather_topic.name
 }
