@@ -41,6 +41,7 @@ jobs:
       run: |
         echo "Habilitando APIs necesarias..."
         gcloud services enable cloudfunctions.googleapis.com || echo "⚠️ No se pudo habilitar Cloud Functions API"
+        gcloud services enable run.googleapis.com || echo "⚠️ No se pudo habilitar Cloud Run API"  # ✅ AGREGAR ESTA LÍNEA
         gcloud services enable cloudbuild.googleapis.com || echo "⚠️ No se pudo habilitar Cloud Build API"
         gcloud services enable logging.googleapis.com || echo "⚠️ No se pudo habilitar Logging API"
         gcloud services enable monitoring.googleapis.com || echo "⚠️ No se pudo habilitar Monitoring API"
