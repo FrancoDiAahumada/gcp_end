@@ -7,6 +7,12 @@ terraform {
       version = "~> 5.44.0"  # Versión 5.x estable sin el bug
     }
   }
+  
+  # ✅ AGREGAR ESTA CONFIGURACIÓN DE BACKEND
+  backend "gcs" {
+    bucket = "weather-etl-terraform-state-464514"
+    prefix = "terraform/state"
+  }
 }
 
 # Configura el proveedor de Google Cloud con el proyecto y la región especificados en las variables
@@ -29,7 +35,6 @@ resource "google_bigquery_dataset" "weather_dataset" {
   location   = var.region                                      # Región donde se crea el dataset
 }
 
-
 resource "google_cloudfunctions2_function" "weather_extract" {
   name     = "weather-etl-extract"
   location = "us-central1"
@@ -45,7 +50,6 @@ resource "google_cloudfunctions2_function" "weather_extract" {
       storage_source {
         bucket     = "gcf-v2-sources-990904885293-us-central1"
         object     = "weather-etl-extract/function-source.zip"
-
       }
     }
   }
@@ -61,7 +65,7 @@ resource "google_cloudfunctions2_function" "weather_extract" {
     ingress_settings = "ALLOW_ALL"
     service_account_email = "990904885293-compute@developer.gserviceaccount.com"
     
-environment_variables = {
+    environment_variables = {
       BUCKET_NAME           = var.bucket_name
       DATASET_ID           = var.dataset_name
       LOG_EXECUTION_ID     = "true"
@@ -83,7 +87,6 @@ environment_variables = {
   }
 }
 
-
 resource "google_cloudfunctions2_function" "weather_transform" {
   name     = "weather-etl-transform"
   location = "us-central1"
@@ -99,7 +102,6 @@ resource "google_cloudfunctions2_function" "weather_transform" {
       storage_source {
         bucket = "gcf-v2-sources-990904885293-us-central1"
         object = "weather-etl-transform/function-source.zip"
-        # generation = "1751904491030691" - Omitido para evitar errores de formato
       }
     }
   }
@@ -141,8 +143,6 @@ resource "google_pubsub_topic" "weather_topic" {
   project = "weather-etl-pipeline-464514"
 }
 
-# Agrega estos recursos a tu main.tf existente
-
 # Dataset para logs
 resource "google_bigquery_dataset" "etl_logs" {
   dataset_id = "etl_logs"
@@ -173,4 +173,17 @@ resource "google_monitoring_notification_channel" "email" {
   labels = {
     email_address = var.notification_email
   }
+}
+
+# ✅ AGREGAR OUTPUTS
+output "bucket_name" {
+  value = google_storage_bucket.weather_data_bucket.name
+}
+
+output "bigquery_dataset" {
+  value = google_bigquery_dataset.weather_dataset.dataset_id
+}
+
+output "pubsub_topic" {
+  value = google_pubsub_topic.weather_topic.name
 }
