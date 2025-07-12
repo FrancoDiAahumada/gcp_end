@@ -32,3 +32,9 @@ variable "notification_email" {
   description = "Email for monitoring notifications"
   type        = string
 }
+
+variable "enable_monitoring" {
+  description = "Habilitar dashboard y alertas"
+  type        = bool
+  default     = true
+}
