@@ -21,8 +21,29 @@ provider "google" {
   region  = var.region
 }
 
+# ✅ AGREGAR: Habilitar APIs necesarias ANTES que todo lo demás
+resource "google_project_service" "required_apis" {
+  for_each = toset([
+    "cloudfunctions.googleapis.com",
+    "run.googleapis.com",              # ✅ CRÍTICO: Cloud Run API
+    "cloudbuild.googleapis.com",
+    "storage.googleapis.com",
+    "bigquery.googleapis.com",
+    "pubsub.googleapis.com",
+    "logging.googleapis.com",
+    "monitoring.googleapis.com"
+  ])
+  
+  project = var.project_id
+  service = each.value
+  
+  disable_dependent_services = true
+}
+
 # Crea un bucket de Google Cloud Storage para almacenar datos meteorológicos
 resource "google_storage_bucket" "weather_data_bucket" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia
+  
   name                        = var.bucket_name                # Nombre del bucket, definido por una variable
   location                    = var.region                     # Región donde se crea el bucket
   force_destroy               = true                           # Permite eliminar el bucket aunque tenga objetos
@@ -31,11 +52,23 @@ resource "google_storage_bucket" "weather_data_bucket" {
 
 # Crea un dataset de BigQuery para almacenar datos meteorológicos
 resource "google_bigquery_dataset" "weather_dataset" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia
+  
   dataset_id = var.dataset_name                                # ID del dataset, definido por una variable
   location   = var.region                                      # Región donde se crea el dataset
 }
 
+# También necesitas importar el topic de Pub/Sub
+resource "google_pubsub_topic" "weather_topic" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia
+  
+  name    = "weather-trigger"
+  project = "weather-etl-pipeline-464514"
+}
+
 resource "google_cloudfunctions2_function" "weather_extract" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia crítica
+  
   name     = "weather-etl-extract"
   location = "us-central1"
   project  = "weather-etl-pipeline-464514"
@@ -77,7 +110,7 @@ resource "google_cloudfunctions2_function" "weather_extract" {
   event_trigger {
     trigger_region = "us-central1"
     event_type     = "google.cloud.pubsub.topic.v1.messagePublished"
-    pubsub_topic   = "projects/weather-etl-pipeline-464514/topics/weather-trigger"
+    pubsub_topic   = google_pubsub_topic.weather_topic.id  # ✅ Usar referencia
     retry_policy   = "RETRY_POLICY_DO_NOT_RETRY"
     service_account_email = "990904885293-compute@developer.gserviceaccount.com"
   }
@@ -88,6 +121,8 @@ resource "google_cloudfunctions2_function" "weather_extract" {
 }
 
 resource "google_cloudfunctions2_function" "weather_transform" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia crítica
+  
   name     = "weather-etl-transform"
   location = "us-central1"
   project  = "weather-etl-pipeline-464514"
@@ -137,14 +172,10 @@ resource "google_cloudfunctions2_function" "weather_transform" {
   }
 }
 
-# También necesitas importar el topic de Pub/Sub
-resource "google_pubsub_topic" "weather_topic" {
-  name    = "weather-trigger"
-  project = "weather-etl-pipeline-464514"
-}
-
 # Dataset para logs
 resource "google_bigquery_dataset" "etl_logs" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia
+  
   dataset_id = "etl_logs"
   location   = "US"
   project    = var.project_id
@@ -152,6 +183,8 @@ resource "google_bigquery_dataset" "etl_logs" {
 
 # Sink para logs
 resource "google_logging_project_sink" "logs_to_bigquery" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia
+  
   name        = "logs-to-bq"
   destination = "bigquery.googleapis.com/projects/${var.project_id}/datasets/etl_logs"
   filter      = "resource.type=cloud_function"
@@ -166,6 +199,8 @@ resource "google_logging_project_sink" "logs_to_bigquery" {
 
 # Canal de notificación por email
 resource "google_monitoring_notification_channel" "email" {
+  depends_on = [google_project_service.required_apis]  # ✅ AGREGAR dependencia
+  
   display_name = "Alertas ETL por correo"
   type         = "email"
   project      = var.project_id
