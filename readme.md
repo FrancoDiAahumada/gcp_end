@@ -18,6 +18,8 @@ Este proyecto construye un pipeline de Extracción, Transformación y Carga (ETL
 
 ## 🏠 Arquitectura del pipeline
 
+El pipeline sigue una arquitectura serverless y orientada a eventos, lo que garantiza escalabilidad y bajo acoplamiento entre los componentes.
+
 ```
  Cloud Scheduler
       ⬇
