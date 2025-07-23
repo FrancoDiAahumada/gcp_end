@@ -3,6 +3,7 @@
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
+.terraform.tfvars
 
 # Python / Cloud Function
 __pycache__/
