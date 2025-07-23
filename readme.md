@@ -338,8 +338,8 @@ Este proyecto está bajo la Licencia MIT. Ver el archivo [LICENSE](LICENSE) para
 **Franco Ahumada** - *Data Engineer*
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat&logo=linkedin)](https://linkedin.com/in/franco-ahumada)
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-black?style=flat&logo=github)](https://github.com/franco-ahumada)
-[![Portfolio](https://img.shields.io/badge/Portfolio-Visit-green?style=flat&logo=web)](https://franco-ahumada.dev)
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-black?style=flat&logo=github)](https://github.com/FrancoDiAahumada)
+[![Portfolio](https://img.shields.io/badge/Portfolio-Visit-green?style=flat&logo=web)](https://www.linkedin.com/in/franco-ahumada-sepulveda-77153416b/)
 
 ---
 
